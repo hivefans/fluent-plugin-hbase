@@ -27,6 +27,7 @@ module Fluent
     config_param :hbase_host, :string, :default => 'localhost'
     config_param :hbase_port, :integer, :default => 9090
     config_param :hbase_table, :string
+    config_param :errorlog_path, :string, :default => '/home/' 
 
     def configure(conf)
       super
@@ -41,40 +42,20 @@ module Fluent
       super
 
       @conn = MassiveRecord::Wrapper::Connection.new(:host => @hbase_host, :port => @hbase_port)
-#      @table = MassiveRecord::Wrapper::Table.new(@conn, @hbase_table.intern)
-#      unless @table.exists?
-#        columns = ([@tag_column_name, @time_column_name] + @mapping.values).reject(&:nil?)
-#        columns = (@tag_column_name+ @mapping.values).reject(&:nil?)
-#        column_families = columns.map {|column_family_with_column|
-#          column_family, column = column_family_with_column.split(":")
-#          if column.nil? or column_family.nil?
-#            raise <<MESSAGE
-#Unexpected format for column name: #{column_family_with_column}
-#Each destination column in the 'record_to_columns_mapping' option
-#must be specified in the format of \"column_family:column\".
-#Are you sure you included ':' in column names?
-#MESSAGE
-#          end
-#
-#          column_family.intern
-#        }
-#        column_families.uniq!
-#
-#        @table.create_column_families(column_families)
-#        @table.save
-#      end
     end
 
     def format(tag, time, record)
-      url=record['path'].split("&")
+      url=record['urlpath'].split("&")
       result={}
       url.each do |x|
        query=x.split("=")
        result[query[0]]=query[1]
       end
-      unless result['gid'].nil?
+      if result['gid'].nil?
+      #  puts record['urlpath']
+      else
       tbname=record['tbname'] + "_" + result['gid']    
-      end 
+      
       stable = MassiveRecord::Wrapper::Table.new(@conn, tbname.intern)
       unless stable.exists?
         columns = ([@tag_column_name, @time_column_name] + @mapping.values).reject(&:nil?)
@@ -97,6 +78,7 @@ MESSAGE
         column_families.uniq!
         stable.create_column_families(column_families)
         stable.save
+        end
       end
 
 
@@ -131,7 +113,7 @@ MESSAGE
     def write(chunk)
       chunk.msgpack_each {|row_values|
         event = {}
-        url=row_values['info:path'].split("&")
+        url=row_values['info:urlpath'].split("&")
         newrowvalues={}
         url.each do |x|
          query=x.split("=")
@@ -141,6 +123,29 @@ MESSAGE
             newrowvalues["info:"+query[0]]=query[1]
          end
        end 
+       @errorlog_file=@errorlog_path+Time.now.strftime("%Y-%m-%d")+".log"
+       if(newrowvalues['info:gid'].nil?) then
+          content=row_values['info:server_ip']+"||"+row_values['info:logpath']+"|| gid is null ||"+row_values['info:urlpath']
+          File.open(@errorlog_file,"a"){|f|
+             f.puts content
+          }
+       elsif(newrowvalues['info:sid'].nil?) then
+         content=row_values['info:server_ip']+"||"+row_values['info:logpath']+"|| sid is null ||"+row_values['info:urlpath']
+         File.open(@errorlog_file,"a"){|f|
+             f.puts content
+          }
+       elsif(newrowvalues['info:dept'].nil?) then
+         content=row_values['info:server_ip']+"||"+row_values['info:logpath']+"|| dept is null ||"+row_values['info:urlpath']
+         File.open(@errorlog_file,"a"){|f|
+             f.puts content
+          }         
+        elsif(newrowvalues['info:time'].nil?) then
+         content=row_values['info:server_ip']+"||"+row_values['info:logpath']+"|| time is null ||"+row_values['info:urlpath']
+         File.open(@errorlog_file,"a"){|f|
+             f.puts content
+          }
+      
+        else
         tbname=row_values['info:tbname']+"_"+newrowvalues['info:gid']
        @newtable = MassiveRecord::Wrapper::Table.new(@conn, tbname.intern)
         newrowvalues.each {|column_family_and_column, value|
@@ -159,6 +164,7 @@ MESSAGE
         row.timestamp=@timestamp.to_i       
         row.table = @newtable
         row.save
+       end
       }
     end
 
