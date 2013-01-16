@@ -8,33 +8,21 @@
 
 Simply use RubyGems:
 
-    gem install fluent-plugin-hbase
+    cp lib/fluent/plugin/out_hbasecsv.rb to /etc/td-agent/plugin
 
 == Configuration
 
     <match pattern>
-      type hbase
-
-      include_time_key TRUE_OR_FALSE
-      time_key KEY_IN_RECORD
-      include_tag_key TRUE_OR_FALSE
-      tag_key KEY_IN_RECORD
-      fields_to_columns_mapping MAPPING_FROM_JSON_FIELDS_TO_HBASE_COLUMNS
-      hbase_host YOUR_HBASE_HOST
-      hbase_port YOUR_HBASE_PORT
-      hbase_table YOUR_HBASE_TABLE_NAME
-
-      # DEPRECATED
-      # The below configuration keys are deprecated to
-      # stay along with fluentd's well-known configuration keys.
-      # Instead, use:
-      # - include_time_key
-      # - time_key
-      # - include_tag_key
-      # - tag_key
-      # - fields_to_columns_mapping
-      tag_column_name HBASE_COLUMN
-      time_column_name HBASE_COLUMN
+      type hbasecsv
+  flush_interval 1
+  include_tag_key true
+  include_time_key true
+  time_format %Y-%m-%d %H:%M:%S %:z
+  fields_to_columns_mapping server_ip=>info:server_ip,logpath=>info:logpath,logvalue=>info:logvalue
+  hbase_host  127.0.0.1
+  hbase_port 9090
+  errorlog_path /home/testlog/
+  hbase_table weblog
     </match>
 
 [include_time_key (optional)] If you need to write each event's time to HBase, set this true
@@ -80,6 +68,8 @@ Each HBASE_COLUMN is formatted as a tripled of a column family name, a colon(:),
 [hbase_port (required)] HBase port
 
 [hbase_table (required)] HBase table name
+
+[errorlog_path (required)] error format log output path
 
 See example/fluent.conf for the configuration should work.
 
